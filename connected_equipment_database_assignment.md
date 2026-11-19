@@ -2108,3 +2108,5 @@ included. Also export the Mermaid ER diagram as an image if the
 submission platform does not render Mermaid.
 
 **---**
+
+**AI was used during the preparation of this assignment specifically to help with the generation of data for testing  as well as for language refinement and document formatting.**
