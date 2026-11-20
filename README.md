@@ -1102,7 +1102,7 @@ interventions.
 
 ## Query C1 - Sensor Measurements Before Incidents
 
-This query uses the same versioning rule as C2 and C3: keep the latest received version, then keep only valid readings. The interval is `[occurred_at - 24 hours, occurred_at)`, so the lower boundary is included and the incident timestamp is not.
+This query keeps the latest received version, then keeps only valid readings. The interval is `[occurred_at - 24 hours, occurred_at)`, so the lower boundary is included and the incident timestamp is not.
 
 ```sql
 
@@ -1422,7 +1422,7 @@ ORDER BY iv.incident_id, iv.variable_name;
 ![C3 equipment monitoring
 indicators](screenshots/14_c3_monitoring_indicators.png)
 
-**Explanation:** Versions are ranked before invalid rows are removed. The aggregation does not join tickets or component links, so one incident cannot multiply the same measurement through several relationships. `incident_variables` keeps the variables available on each equipment unit visible; when no valid reading exists, the count is `0` and the other indicators are `NULL`.
+**Explanation:** The aggregation does not join tickets or component links, so one incident cannot multiply the same measurement through several relationships. `incident_variables` keeps the variables available on each equipment unit visible; when no valid reading exists, the count is `0` and the other indicators are `NULL`.
 
 ## Query C4 - Maintenance History Analysis
 
@@ -1523,10 +1523,10 @@ JOIN Installation b
 ![C5 overlapping installation
 periods](screenshots/16_c5_overlapping_installations.png)
 
-**Consequence:** Overlapping periods can make it impossible
-to determine which equipment unit physically contained a component at a
-given time. This can lead to incorrect incident attribution and
-unreliable maintenance history.
+**Consequence:** Overlapping periods can make it impossible to determine
+which equipment unit physically contained a component at a given time,
+leading to incorrect incident attribution and unreliable maintenance
+history.
 
 ### 2. Incidents outside actual installation periods
 
@@ -1562,9 +1562,9 @@ WHERE i.equipment_id <> ins.equipment_id
    ![C5 incidents outside installation
 periods](screenshots/18_c5_incidents_outside_installations.png)
 
-**Consequence:** An incident may be attributed to a
-component that was not installed on the equipment at the time. This
-corrupts root-cause analysis and component reliability statistics.
+**Consequence:** An incident may be attributed to a component that was
+not installed on the equipment at the time, corrupting root-cause
+analysis and component reliability statistics.
 
 ### 3. Inconsistent measurement timestamps
 
@@ -1577,14 +1577,13 @@ FROM Measurement
 WHERE received_at < measured_at;
 ```
 
-**Actual result:** No rows were returned. The empty result
-is consistent with the `received_at >= measured_at` CHECK constraint.
+**Actual result:** No rows were returned, consistent with the
+`received_at >= measured_at` CHECK constraint.
 
 ![C5 inconsistent measurement
 timestamps](screenshots/19_c5_inconsistent_measurement_timestamps.png)
 
-The row-level CHECK constraint should prevent this inconsistency. The
-query is useful as an audit if data were imported from an external
+The query is useful as an audit if data were imported from an external
 source or constraints were disabled during loading.
 
 **Consequence:** Incorrect timestamp ordering can distort
@@ -1649,13 +1648,12 @@ their ticket was created.
 ![C5 maintenance executed before ticket
 creation](screenshots/17_c5_relationships_before_ticket.png)
 
-**Consequence:** Missing relationships make the intervention
-history incomplete. A maintenance action executed before the ticket was
-created may indicate an incorrect timestamp or an incomplete import
-process. A ticket without maintenance is not automatically an error,
-because not every support request must lead to an intervention. On this
-dataset the third query returns no rows: maintenance 1 is executed at
-15:00, after ticket 1 was opened at 12:30.
+**Consequence:** Missing relationships make the intervention history
+incomplete. Maintenance before ticket creation may indicate an incorrect
+timestamp or incomplete import process. A ticket without maintenance is
+not automatically an error, because not every support request must lead
+to an intervention. On this dataset, maintenance 1 is executed at 15:00,
+after ticket 1 was opened at 12:30.
 
 # 6. Part D - Validation and Critical Analysis
 
@@ -1882,7 +1880,7 @@ execution.
 ### 1. Why can SQL queries containing several joins produce incorrect aggregates even when all join conditions are syntactically valid?
 
 Several joins can multiply rows when the relationships are one-to-many
-or many-to-many. This is known as join fan-out.
+or many-to-many, a problem known as join fan-out.
 
 For example, incident 1 has two component associations and two support
 tickets. Joining `Incident`, `IncidentComponent` and `SupportTicket`
@@ -1890,15 +1888,14 @@ produces four combinations for that incident. If measurements are also
 joined, each measurement can be repeated across those combinations.
 
 An aggregate such as `COUNT(*)` or `SUM(value)` may therefore count the
-same measurement multiple times. The SQL is syntactically valid, and
-each join condition may be correct, but the resulting row set has a
-different granularity from the intended measurement-level analysis.
+same measurement multiple times. The SQL and join conditions can be
+correct, but the resulting row set may have a different granularity from
+the intended measurement-level analysis.
 
-In this implementation, the C3 query first deduplicates measurements and
-aggregates them by incident and measured variable. It does not join
-tickets or incident-component rows into the measurement aggregation.
-This prevents the additional relationships from multiplying the
-measurement rows.
+In this implementation, the C3 query deduplicates measurements and
+aggregates them by incident and measured variable without joining tickets
+or incident-component rows into the measurement aggregation. This
+prevents those relationships from multiplying the measurement rows.
 
 ### 2. What are the limitations of foreign keys for ensuring temporal consistency of industrial information?
 
