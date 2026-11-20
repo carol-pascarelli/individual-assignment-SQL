@@ -2,50 +2,27 @@
 
 ##  Context
 
-This project develops a PostgreSQL database for monitoring equipment and
-managing its components, sensor readings, incidents, support tickets and
-maintenance work.
+This project develops a PostgreSQL database for monitoring equipment and managing its components, sensor readings, incidents, support tickets and maintenance work.
 
-The database is implemented in PostgreSQL. It keeps a record of past
-events instead of replacing them with the latest state. Each component
-installation is stored as a separate time interval, so an incident can
-be linked to the installation that was active when it occurred.
+The database is implemented in PostgreSQL. It keeps a record of past events instead of replacing them with the latest state. Each component installation is stored as a separate time interval, so an incident can be linked to the installation that was active when it occurred.
 
 ## 2. Functional Specifications
 
 ### 2.1 Equipment and components
 
-The database represents equipment units installed at customer sites,
-their technical components and the complete history of component
-installations and removals. A component may be transferred and
-reinstalled, but it cannot be installed on two equipment units
-simultaneously. Historical installation rows must not be overwritten,
-and component identifiers must remain consistent in incident and
-maintenance records.
+The database represents equipment units installed at customer sites, their technical components and the complete history of component installations and removals. A component may be transferred and reinstalled, but it cannot be installed on two equipment units simultaneously. History of installation rows must not be overwritten, and component identifiers must remain consistent in incident and maintenance records.
 
 ### 2.2 Sensors and measurements
 
-Each sensor is linked to an equipment unit and a measured variable with
-its unit. Measurements store the sensor, value, measurement timestamp,
-reception timestamp and quality status. The design supports late,
-duplicate, invalid and missing measurements, including records sharing a
-sensor and measurement timestamp but having different reception
-timestamps.
+Each sensor is linked to an equipment unit and a measured variable with its unit. Measurements store the sensor, value, measurement timestamp, reception timestamp and quality status. The design supports late, duplicate, invalid and missing measurements, including records sharing a sensor and measurement timestamp but having different reception timestamps.
 
 ### 2.3 Incidents and technical support
 
-Each incident stores its occurrence timestamp, category, severity,
-description and optional resolution timestamp. Incidents may involve
-several components and may generate multiple support tickets. Each
-ticket stores its creation timestamp, status and description.
+Each incident stores its occurrence timestamp, category, severity, description and optional resolution timestamp. Incidents may involve several components and may generate multiple support tickets. Each ticket stores its creation timestamp, status and description.
 
 ### 2.4 Maintenance interventions
 
-A support ticket may lead to one or more maintenance interventions. Each
-intervention stores its execution timestamp, type, technical outcome and
-associated ticket. An intervention may replace several components and
-does not necessarily resolve the incident. The model supports
-chronological reconstruction of incidents, tickets and interventions.
+A support ticket may lead to one or more maintenance interventions. Each intervention stores its execution timestamp, type, technical outcome and associated ticket. An intervention may replace several components and does not necessarily resolve the incident. The model supports chronological reconstruction of incidents, tickets and interventions.
 
 # 3. Part A - Conceptual and Relational Database Design
 
@@ -69,10 +46,8 @@ chronological reconstruction of incidents, tickets and interventions.
 | `MaintenanceComponent` | `maintenance_id` (PK/FK), `installation_id` (PK/FK), `action` | Installation episodes affected by a maintenance intervention. |
 
 The associative entities resolve many-to-many relationships.
-`IncidentComponent` allows one incident to involve several component
-installations and one installation to be involved in multiple incidents.
-`MaintenanceComponent` allows one intervention to affect several
-installation episodes.
+`IncidentComponent` allows one incident to involve several component installations and one installation to be involved in multiple incidents.
+`MaintenanceComponent` allows one intervention to affect several installation episodes.
 
 ### Relationships and cardinalities
 
@@ -94,9 +69,7 @@ installation episodes.
 
 ### Entity-relationship diagram
 
-The ER diagram is provided below in Mermaid format. If the submission
-platform does not display Mermaid diagrams, export it as an image and
-include that image with the report.
+The ER diagram is provided below in Mermaid format. 
 
 ```mermaid
 
@@ -326,52 +299,27 @@ Example:
 | 2 | 1 | 2 | 2026-03-15 10:00 | NULL |
 
 The interval convention is **\[installed_at, removed_at)**:
-the start is included and the removal timestamp is excluded. The
-component is therefore not installed on both equipment units at the
+the start is included and the removed at timestamp is excluded. The
+component is then not installed on both equipment units at the
 transfer instant.
 
-An incident is linked through `IncidentComponent` to the exact
+An incident is linked through `IncidentComponent` to the
 `installation_id` that was active when the incident occurred. This
-avoids ambiguity when the same physical component is later installed on
+avoids mix ups when the same physical component is later installed on
 another equipment unit.
 
-### What standard constraints can enforce
-
--   **Primary keys:** uniquely identify rows.
-
--   **Foreign keys:** ensure that referenced equipment,
-    components, installations, incidents and tickets exist.
-
--   **NOT NULL:** require mandatory values.
-
--   **UNIQUE:** prevent duplicate identifiers or
-    combinations.
-
--   **CHECK:** validate conditions within one row, such as
-    `removed_at > installed_at` and `received_at >= measured_at`.
-
--   **Composite foreign keys:** ensure that the installation
-    and incident refer to the same equipment unit.
 
 ### What requires additional temporal validation
 
-A normal `CHECK` constraint cannot compare the installation period in
-one row with periods in other rows. It therefore cannot, by itself,
-prevent overlapping installation periods for the same component.
-PostgreSQL can enforce this with an exclusion constraint over a
-timestamp range and GiST index support.
+A normal `CHECK` constraint cannot compare the installation period in one row with periods in other rows. It therefore cannot, by itself, prevent overlapping installation periods for the same component. PostgreSQL can enforce this with an exclusion constraint over a timestamp range and GiST index support.
 
-A foreign key also cannot prove that an incident timestamp falls inside
-the referenced installation's interval. That condition requires a
-trigger or controlled transaction logic. The implementation below uses a
-trigger for incident-to-installation temporal validation.
+A foreign key also cannot prove that an incident timestamp falls inside the referenced installation's interval. That condition requires a trigger or controlled transaction logic. The implementation below uses a trigger for incident-to-installation temporal validation.
 
 # 4. Part B - SQL Implementation and Synthetic Data
 
 ## Task B1 - Database Creation
 
-The script below creates the tables, keys, checks, temporal exclusion
-constraint and validation triggers. Run it in a new PostgreSQL database.
+The script below creates the tables, keys, checks, temporal exclusion constraint and validation triggers.
 
 ```sql
 
@@ -773,20 +721,7 @@ BEFORE INSERT OR UPDATE ON MaintenanceComponent
 
 FOR EACH ROW EXECUTE FUNCTION validate_maintenance_installation();
 ```
-
-**Temporal trigger note:** each trigger validates the
-relationship when an associative row is inserted or updated. The
-maintenance trigger also rejects an installation that belongs to a
-different equipment unit from the ticket's incident. In a production
-system, changes to the referenced incident, installation or maintenance
-timestamps must also be controlled (for example, by making historical
-timestamps immutable or by adding complementary update triggers). The
-exclusion constraint prevents installation-period overlaps for a
-component.
-
-**PostgreSQL execution evidence:** The screenshot below
-should show the successful creation of the triggers and the database
-tables. Keep it only if it matches the final execution of the script.
+ The screenshot below shows the successful creation of the triggers and the database tables. 
 
 ![Successful trigger
 creation](screenshots/01_trigger_creation_success.png)
@@ -796,10 +731,7 @@ database](screenshots/02_database_tables_created.png)
 
 ## Task B2 - Synthetic Data Generation
 
-The inserts below provide the required minimum data: five equipment
-units, ten components, ten sensors, 150 measurements, ten incidents,
-twelve support tickets and ten maintenance interventions. Explicit IDs
-make the test cases easier to follow.
+The code below provide the required minimum data: five equipment units, ten components, ten sensors, 150 measurements, ten incidents, twelve support tickets and ten maintenance interventions. 
 
 ```sql
 
@@ -1114,23 +1046,6 @@ INSERT INTO Measurement
 (1, 76.0, '2026-02-01 12:00', '2026-02-01 12:01', 'valid');
 ```
 
-The generated series contains 2,110 rows (211 timestamps × 10 sensors),
-plus six deliberate test rows, for 2,116 measurements in total. This
-exceeds the required minimum of 150. Every incident except incident 10
-has valid readings in its preceding 24 hours. Incident 10's equipment-5
-readings in that window are stored, but they are marked `invalid`.
-
-Maintenance 5 replaces pump installation 5 at 09:00. That episode is
-closed at 09:05, and installation 12 starts at the same instant with the
-successor pump. The maintenance row stays attached to installation 5,
-which still covers 09:00 under the half-open interval.
-
-**PostgreSQL execution evidence:** The deliberate
-measurement insert completed successfully, adding six rows for
-duplicate, tie-breaking and boundary scenarios.
-
-![Six deliberate measurement rows
-inserted](screenshots/03_measurement_rows_inserted.png)
 
 ### Minimum-count verification
 
@@ -1187,10 +1102,7 @@ interventions.
 
 ## Query C1 - Sensor Measurements Before Incidents
 
-This query uses the same versioning rule as C2 and C3: keep the latest
-received version, then keep only valid readings. The interval is
-`[occurred_at - 24 hours, occurred_at)`, so the lower boundary is
-included and the incident timestamp is not.
+This query uses the same versioning rule as C2 and C3: keep the latest received version, then keep only valid readings. The interval is `[occurred_at - 24 hours, occurred_at)`, so the lower boundary is included and the incident timestamp is not.
 
 ```sql
 
@@ -1267,27 +1179,18 @@ JOIN authoritative_valid m
 ORDER BY i.incident_id, m.measured_at;
 ```
 
-**PostgreSQL execution evidence:** C1 returned 38 rows. The
-results exclude measurements at the incident timestamp and include only
-readings associated with the matching equipment unit.
+ C1 returned 38 rows. The results exclude measurements at the incident timestamp and include only readings associated with the matching equipment unit.
 
 ![C1 result - first rows](screenshots/04_c1_results_top.png)
 
 ![C1 result - remaining
 rows](screenshots/05_c1_results_continuation.png)
 
-**Explanation:** Joining through `equipment_id` prevents
-readings from other equipment from being included. Incident 6 does not
-include sensor 5's `10:00` reading because its later version is invalid.
-Since this is an inner join, incidents without valid readings (such as
-incident 10) do not appear in C1; C3 handles that case separately.
+**Explanation:** Joining through `equipment_id` prevents readings from other equipment from being included. Incident 6 does not include sensor 5's `10:00` reading because its later version is invalid. Since this is an inner join, incidents without valid readings (such as incident 10) do not appear in C1; C3 handles that case separately.
 
 ## Query C2 - Duplicate Measurement Management
 
-A logical duplicate is defined by the same `sensor_id` and
-`measured_at`. The authoritative row is the one with the latest
-`received_at`. If reception timestamps are tied, the highest
-`measurement_id` is selected as a deterministic tie-breaker.
+A logical duplicate is defined by the same `sensor_id` and `measured_at`. The authoritative row is the one with the latest `received_at`. If reception timestamps are tied, the highest `measurement_id` is selected as a deterministic tie-breaker.
 
 ```sql
 
@@ -1343,19 +1246,13 @@ ORDER BY sensor_id, measured_at;
 ![C2 authoritative valid
 measurements](screenshots/13_c2_duplicate_management.png)
 
-**Explanation:** For sensor 5 at `2026-04-10 10:00`, the
-invalid row was received later, so it is authoritative and the logical
-measurement is excluded. For sensor 2, the reception timestamps are tied
-and the larger `measurement_id` breaks the tie.
+**Explanation:** For sensor 5 at `2026-04-10 10:00`, the invalid row was received later, so it is authoritative and the logical measurement is excluded. For sensor 2, the reception timestamps are tied and the larger `measurement_id` breaks the tie.
 
-Filtering quality before ranking would incorrectly promote the older
-valid row and treat it as the final reading.
+Filtering quality before ranking would incorrectly promote the older valid row and treat it as the final reading.
 
 ## Query C3 - Equipment Monitoring Indicators
 
-This query calculates the count, minimum, maximum, average and latest
-value for each incident and measured variable. It also keeps incidents
-whose valid-reading count is zero.
+This query calculates the count, minimum, maximum, average and latest value for each incident and measured variable. It also keeps incidents whose valid-reading count is zero.
 
 ```sql
 
@@ -1525,18 +1422,11 @@ ORDER BY iv.incident_id, iv.variable_name;
 ![C3 equipment monitoring
 indicators](screenshots/14_c3_monitoring_indicators.png)
 
-**Explanation:** Versions are ranked before invalid rows are
-removed. The aggregation does not join tickets or component links, so
-one incident cannot multiply the same measurement through several
-relationships. `incident_variables` keeps the variables available on
-each equipment unit visible; when no valid reading exists, the count is
-`0` and the other indicators are `NULL`.
+**Explanation:** Versions are ranked before invalid rows are removed. The aggregation does not join tickets or component links, so one incident cannot multiply the same measurement through several relationships. `incident_variables` keeps the variables available on each equipment unit visible; when no valid reading exists, the count is `0` and the other indicators are `NULL`.
 
 ## Query C4 - Maintenance History Analysis
 
-This query finds the latest intervention on the same equipment unit
-before each incident, while keeping incidents with no earlier
-maintenance.
+This query finds the latest intervention on the same equipment unit before each incident, while keeping incidents with no earlier maintenance.
 
 ```sql
 
@@ -1591,18 +1481,13 @@ ORDER BY i.incident_id;
 
 ![C4 latest prior maintenance](screenshots/15_c4_latest_maintenance.png)
 
-**Explanation:** `LEFT JOIN LATERAL` selects one prior
-intervention per incident, ordered by execution time. The equipment is
-obtained through the incident linked to the ticket. If no intervention
-qualifies, the maintenance columns are `NULL`.
+**Explanation:** `LEFT JOIN LATERAL` selects one prior intervention per incident, ordered by execution time. The equipment is obtained through the incident linked to the ticket. If no intervention qualifies, the maintenance columns are `NULL`.
 
 ## Query C5 - Data Consistency Verification
 
 ### 1. Overlapping installation periods
 
-The exclusion constraint in the creation script prevents overlaps for
-the same component. The following query can also be used to audit
-existing data:
+The exclusion constraint in the creation script prevents overlaps for the same component. The following query can also be used to audit existing data:
 
 ```sql
 
@@ -1775,11 +1660,6 @@ dataset the third query returns no rows: maintenance 1 is executed at
 # 6. Part D - Validation and Critical Analysis
 
 ## Task D1 - SQL Validation
-
-Run these scenarios in PostgreSQL 16 after executing the table-creation
-and data-insertion scripts. Put each statement expected to fail in its
-own transaction, then roll it back. Keep the corresponding pgAdmin
-output and screenshot for each test in the submitted work.
 
 ### Scenario 1 --- Measurement exactly 24 hours before an incident
 
@@ -2078,35 +1958,6 @@ mode, downtime duration, replacement cost, operating hours and
 maintenance labor. These would support more detailed reliability
 indicators and predictive models.
 
-## Final grading audit
+# Disclaimer
 
-| Worksheet requirement | Location in this document | Coverage in document | Remaining action |
-|---|---|---|---|
-| Project context and centralized database objective | 1. Project Context | Addressed | None |
-| Task A1: complete ERD with entities, attributes, keys, cardinalities and historical installations | Task A1 - Entity-Relationship Model | Addressed | Render the Mermaid diagram if the submission format does not render Mermaid automatically. |
-| Task A2: relational schema derived from the conceptual model | Task A2 - Relational Schema | Addressed | None |
-| Task A3: preserve transfer history, prevent incorrect incident associations, and distinguish standard constraints from additional validation | Task A3 - Temporal Consistency | Addressed | None |
-| Task B1: complete SQL creation script with required tables, primary keys and foreign keys | Task B1 - Database Creation | Addressed | Confirm the script is run on PostgreSQL 16 or the version required by the course. |
-| Task B2: minimum data quantities | Task B2 - Synthetic Data Generation; Minimum-count verification | Addressed | None |
-| Task B2: transfer, repeated component incidents, multi-component incident, repeated tickets, duplicate and invalid measurements, no-valid-reading incident, and unresolved incident after maintenance | Task B2 - Synthetic Data Generation; Required situations represented | Addressed | None |
-| Query C1: valid measurements in the preceding 24 hours for each incident and equipment | Query C1 - Sensor Measurements Before Incidents | Addressed | None |
-| Query C2: authoritative duplicate selection, tie-breaker, post-selection quality filtering and explanation | Query C2 - Duplicate Measurement Management | Addressed | None |
-| Query C3: all required indicators, including incidents with no valid readings and protection against join fan-out | Query C3 - Equipment Monitoring Indicators | Addressed | None |
-| Query C4: latest prior maintenance on the same equipment, elapsed time, and incidents without prior maintenance | Query C4 - Maintenance History Analysis | Addressed | None |
-| Query C5: four inconsistency checks and consequences | Query C5 - Data Consistency Verification | Addressed | None |
-| Task D1: five targeted scenarios with test data, expected result, actual result and explanation | Task D1 - SQL Validation | Addressed | Keep the five supplied screenshots with the document. |
-| Task D2: three critical-analysis questions supported by implementation examples | Task D2 - Critical Analysis | Addressed | None |
-
-### Submission-readiness conclusion
-
-The sections in this document cover the requirements listed in the
-worksheet. This checklist is a guide to the document's coverage; it does
-not replace testing the SQL in PostgreSQL. Before submitting, run the
-scripts and queries again from a clean database, check that the results
-match the explanations, and make sure every referenced screenshot is
-included. Also export the Mermaid ER diagram as an image if the
-submission platform does not render Mermaid.
-
-**---**
-
-**AI was used during the preparation of this assignment specifically to help with the generation of data for testing  as well as for language refinement and document formatting.**
+**AI was used during the preparation of this assignment specifically to help with the summary and context of the project, generation of data for testing  as well as for language refinement and document formatting.**
